@@ -17,7 +17,7 @@ class PsxExe:
         header = li.read(0x800)
 
         if len(header) < 0x800:
-            return
+            return None
 
         pos = 0
         ascii_id = struct.unpack_from('8s', header, pos)[0]
