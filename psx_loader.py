@@ -128,14 +128,14 @@ class PsxExe:
 
     @classmethod
     def add_dma(cls):
-        idaapi.add_segm(0, 0x1F801080, 0x1F801090, 'DMA_MDEC_IN', 'XTRN')
-        idaapi.add_segm(0, 0x1F801090, 0x1F8010A0, 'DMA_MDEC_OUT', 'XTRN')
-        idaapi.add_segm(0, 0x1F8010A0, 0x1F8010B0, 'DMA_GPU', 'XTRN')
-        idaapi.add_segm(0, 0x1F8010B0, 0x1F8010C0, 'DMA_CDROM', 'XTRN')
-        idaapi.add_segm(0, 0x1F8010C0, 0x1F8010D0, 'DMA_SPU', 'XTRN')
-        idaapi.add_segm(0, 0x1F8010D0, 0x1F8010E0, 'DMA_PIO', 'XTRN')
-        idaapi.add_segm(0, 0x1F8010E0, 0x1F8010F0, 'DMA_OTC', 'XTRN')
-        idaapi.add_segm(0, 0x1F8010F0, 0x1F8010F4, 'DMA_CTRL_INT', 'XTRN')
+        idaapi.add_segm(0, 0x1F801080, 0x1F80108C, 'DMA_MDEC_IN', 'XTRN')
+        idaapi.add_segm(0, 0x1F801090, 0x1F80109C, 'DMA_MDEC_OUT', 'XTRN')
+        idaapi.add_segm(0, 0x1F8010A0, 0x1F8010AC, 'DMA_GPU', 'XTRN')
+        idaapi.add_segm(0, 0x1F8010B0, 0x1F8010BC, 'DMA_CDROM', 'XTRN')
+        idaapi.add_segm(0, 0x1F8010C0, 0x1F8010CC, 'DMA_SPU', 'XTRN')
+        idaapi.add_segm(0, 0x1F8010D0, 0x1F8010DC, 'DMA_PIO', 'XTRN')
+        idaapi.add_segm(0, 0x1F8010E0, 0x1F8010EC, 'DMA_OTC', 'XTRN')
+        idaapi.add_segm(0, 0x1F8010F0, 0x1F8010F8, 'DMA_CTRL_INT', 'XTRN')
 
         cls.add_port_4(0x1F801080, 'DMA_MDEC_IN_MADR')
         cls.add_port_4(0x1F801084, 'DMA_MDEC_IN_BCR')
