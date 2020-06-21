@@ -1,5 +1,6 @@
 import struct
 
+import ida_bytes
 import ida_idp
 import ida_search
 import idaapi
@@ -22,7 +23,7 @@ class PsxExe:
         pos = 0
         ascii_id = struct.unpack_from('8s', header, pos)[0]
 
-        if ascii_id != 'PS-X EXE':
+        if ascii_id != b'PS-X EXE':
             return None
 
         init_pc = struct.unpack_from('I', header, 0x10)[0]
@@ -42,7 +43,7 @@ class PsxExe:
         sp_offset = struct.unpack_from('I', header, 0x34)[0]
         idaapi.msg('SP = 0x%08X\n' % (sp_base + sp_offset))
 
-        return\
+        return \
             {
                 'pc': init_pc,
                 'gp': init_gp,
@@ -213,14 +214,13 @@ class PsxExe:
     def add_spu_voices(cls):
         idaapi.add_segm(0, 0x1F801C00, 0x1F801C00 + 0x10 * 24, 'SPU_VOICES', 'XTRN')
 
-        for i in xrange(24):
+        for i in range(24):
             cls.add_port_4(0x1F801C00 + i * 0x10 + 0x00, 'VOICE_%02x_LEFT_RIGHT' % i)
             cls.add_port_2(0x1F801C00 + i * 0x10 + 0x04, 'VOICE_%02x_ADPCM_SAMPLE_RATE' % i)
             cls.add_port_2(0x1F801C00 + i * 0x10 + 0x06, 'VOICE_%02x_ADPCM_START_ADDR' % i)
             cls.add_port_2(0x1F801C00 + i * 0x10 + 0x08, 'VOICE_%02x_ADSR_ATT_DEC_SUS_REL' % i)
             cls.add_port_2(0x1F801C00 + i * 0x10 + 0x0C, 'VOICE_%02x_ADSR_CURR_VOLUME' % i)
             cls.add_port_2(0x1F801C00 + i * 0x10 + 0x0E, 'VOICE_%02x_ADPCM_REPEAT_ADDR' % i)
-
 
     @classmethod
     def add_spu_ctrl_regs(cls):
@@ -294,13 +294,6 @@ class PsxExe:
         idaapi.cvar.inf.start_ss = idaapi.cvar.inf.start_cs = 0
         idaapi.cvar.inf.start_ip = idaapi.cvar.inf.start_ea = psx['pc']
         idaapi.cvar.inf.start_sp = psx['sp_base'] + psx['sp_offset']
-        # idaapi.cvar.inf.main = cls.find_main(psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
-        #
-        # if idaapi.cvar.inf.main != idaapi.BADADDR:
-        #     idaapi.msg('main() addr = 0x%08X\n' % idaapi.cvar.inf.main)
-        #     idaapi.set_name(idaapi.cvar.inf.main, 'main')
-
-
 
 
 def accept_file(li, filename):
@@ -320,9 +313,9 @@ def load_file(li, neflags, format):
     idaapi.set_processor_type('mipsl', ida_idp.SETPROC_LOADER)
 
     idaapi.cvar.inf.af = idaapi.AF_CODE | idaapi.AF_JUMPTBL | idaapi.AF_USED | idaapi.AF_UNK | idaapi.AF_PROC | \
-        idaapi.AF_STKARG | idaapi.AF_REGARG | idaapi.AF_TRACE | idaapi.AF_VERSP | idaapi.AF_ANORET | \
-        idaapi.AF_MEMFUNC | idaapi.AF_TRFUNC | idaapi.AF_FIXUP | idaapi.AF_JFUNC | idaapi.AF_IMMOFF | \
-        idaapi.AF_STRLIT | idaapi.AF_MARKCODE | idaapi.AF_LVAR | idaapi.AF_PROCPTR
+                         idaapi.AF_STKARG | idaapi.AF_REGARG | idaapi.AF_TRACE | idaapi.AF_VERSP | idaapi.AF_ANORET | \
+                         idaapi.AF_MEMFUNC | idaapi.AF_TRFUNC | idaapi.AF_FIXUP | idaapi.AF_JFUNC | idaapi.AF_IMMOFF | \
+                         idaapi.AF_STRLIT | idaapi.AF_MARKCODE | idaapi.AF_LVAR | idaapi.AF_PROCPTR
 
     psx_exe.create_segments(li, psx)
 
