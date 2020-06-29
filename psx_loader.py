@@ -315,7 +315,7 @@ def load_file(li, neflags, format):
     idaapi.cvar.inf.af = idaapi.AF_CODE | idaapi.AF_JUMPTBL | idaapi.AF_USED | idaapi.AF_UNK | idaapi.AF_PROC | \
                          idaapi.AF_STKARG | idaapi.AF_REGARG | idaapi.AF_TRACE | idaapi.AF_VERSP | idaapi.AF_ANORET | \
                          idaapi.AF_MEMFUNC | idaapi.AF_TRFUNC | idaapi.AF_FIXUP | idaapi.AF_JFUNC | idaapi.AF_IMMOFF | \
-                         idaapi.AF_STRLIT | idaapi.AF_MARKCODE | idaapi.AF_LVAR | idaapi.AF_PROCPTR
+                         idaapi.AF_STRLIT | idaapi.AF_MARKCODE | idaapi.AF_LVAR | idaapi.AF_PROCPTR | idaapi.AF_FLIRT
 
     psx_exe.create_segments(li, psx)
 
