@@ -1,0 +1,3 @@
+[submodule "psyq"]
+	path = psyq
+	url = ../psx_psyq_signatures
