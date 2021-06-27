@@ -1,0 +1,3 @@
+[submodule "psyq"]
+	path = psyq
+	url = https://github.com/lab313ru/psx_psyq_signatures
