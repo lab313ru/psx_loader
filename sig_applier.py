@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# import pydevd_pycharm
 import binascii
 import json
 import math
@@ -11,10 +10,8 @@ from typing import List, Optional, Tuple
 import ida_auto
 import ida_bytes
 import ida_entry
-import ida_idp
 import idaapi
 import idc
-
 
 ONLY_FIRST = True
 MIN_ENTROPY = 3.0
@@ -82,12 +79,12 @@ class DetectPsyQ:
         if offset == idaapi.BADADDR:
             return self.__get_old_psy_version(start_addr, end_addr)
 
-        version = idaapi.get_word(offset + DetectPsyQ.VERSION_OFFSET)  # not swapped
+        vv = idaapi.get_word(offset + DetectPsyQ.VERSION_OFFSET)  # not swapped
 
-        if version & 0xFF00 == 0:
-            return '%03X' % ((version & 0xFF) << 4)
+        if vv & 0xFF00 == 0:
+            return '%03X' % ((vv & 0xFF) << 4)
 
-        return '%X' % (((version >> 0) & 0xFF) | ((version >> 8) & 0xFF))
+        return '%X' % (((vv >> 0) & 0xFF) | ((vv >> 8) & 0xFF))
 
     def __get_old_psy_version(self, start_addr: int, end_addr: int) -> str:
         psyq_dir = idaapi.idadir(os.path.join('loaders', 'psyq'))
@@ -784,7 +781,7 @@ class PsxExe:
         idaapi.cvar.inf.start_sp = psx['sp_base'] + psx['sp_offset']
 
     def apply_psyq_signatures_by_version(self, version: str, start_addr: int, end_addr: int) -> None:
-        ida_psyq = idaapi.idadir(os.path.join('loaders', 'psyq'))
+        ida_psyq = idaapi.idadir(os.path.join(idaapi.LDR_SUBDIR, 'psyq'))
         patches_file = os.path.join(ida_psyq, 'patches.json')
         ver_dir = os.path.join(ida_psyq, version)
 
@@ -805,19 +802,33 @@ class PsxExe:
 
             sig.apply_signatures(start_addr, end_addr)
 
+    @staticmethod
+    def apply_til(ver):
+        if len(ver) > 0:
+            idaapi.add_til('psyq%s.til' % ver, idaapi.ADDTIL_DEFAULT)
 
-fname = idaapi.get_input_file_path()
-psx_exe = PsxExe(os.path.basename(fname), ONLY_FIRST, MIN_ENTROPY)
 
-li = open(fname, 'rb')
-psx = psx_exe.parse(li)
-li.close()
+def accept_file(li, filename):
+    return 0
 
-detect = DetectPsyQ(psx_exe.get_exe_name(), ONLY_FIRST, MIN_ENTROPY)
-version = detect.get_psyq_version(psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
-psx_exe.apply_psyq_signatures_by_version(version, psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
 
-if psx['gp'] != 0:
-    idc.process_config_line("MIPS_GP=0x%08X" % psx['gp'])
-else:
-    idaapi.warning('$GP from header is zero! Check \'start \' function for a $gp loading instruction.\n')
+def load_file(li, neflags, format):
+    return 0
+
+
+if __name__ == '__main__':
+    fname = idaapi.get_input_file_path()
+    psx_exe = PsxExe(os.path.basename(fname), ONLY_FIRST, MIN_ENTROPY)
+
+    li = open(fname, 'rb')
+    psx = psx_exe.parse(li)
+    li.close()
+
+    detect = DetectPsyQ(psx_exe.get_exe_name(), ONLY_FIRST, MIN_ENTROPY)
+    version = detect.get_psyq_version(psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
+    psx_exe.apply_psyq_signatures_by_version(version, psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
+
+    if psx['gp'] != 0:
+        idc.process_config_line("MIPS_GP=0x%08X" % psx['gp'])
+    else:
+        idaapi.warning('$GP from header is zero! Check \'start \' function for a $gp loading instruction.\n')
