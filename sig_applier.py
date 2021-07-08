@@ -129,6 +129,10 @@ class MaskedBytes:
     def get_masks(self) -> bytes:
         return bytes(self._masks_data)
 
+    def is_bios_call(self) -> bool:
+        return (self._bytes_data[0] in [0xA0, 0xB0, 0xC0]) and \
+               (self._bytes_data[1:7] == b'\x00\x0A\x24\x08\x00\x40\x01')
+
     @staticmethod
     def from_masked_string(sig: str) -> Optional[MaskedBytes]:
         if sig is None:
@@ -159,13 +163,13 @@ class MaskedBytes:
         entropy = 0.0
         total = len(self) * 1.0
 
-        f = bytearray(self.get_bytes())
+        ff = bytearray(self.get_bytes())
         m = bytearray(self.get_masks())
 
         for i in range(len(m)):
-            f[i] &= m[i]
+            ff[i] &= m[i]
 
-        for b in f:
+        for b in ff:
             counts[((b ^ 0x80) - 0x80) + 128] += 1
 
         for c in counts:
@@ -328,22 +332,22 @@ class SigApplier:
         self.only_first = only_first
         self.min_entropy = min_entropy
 
-        f, e = os.path.splitext(lib_json_path)
-        self.short_lib_name = os.path.basename(f)
+        ff, e = os.path.splitext(lib_json_path)
+        self.short_lib_name = os.path.basename(ff)
 
         root = None
 
         if lib_json_path and os.path.exists(lib_json_path):
-            with open(lib_json_path) as f:
-                root = json.load(f)
+            with open(lib_json_path) as ff:
+                root = json.load(ff)
 
         patches = None
 
         if patches_file and os.path.exists(patches_file):
-            with open(patches_file) as f:
-                patches = json.load(f)
+            with open(patches_file) as ff:
+                patches = json.load(ff)
 
-        d, f = os.path.split(lib_json_path)
+        d, _ = os.path.split(lib_json_path)
         d, psyq_lib_version = os.path.split(d)
 
         patches_obj = self.__find_game_patches(patches, psyq_lib_version)
@@ -355,7 +359,7 @@ class SigApplier:
 
             self._signatures.append(sig)
 
-    def __find_game_patches(self, patches: dict, version: str) -> Optional[list]:
+    def __find_game_patches(self, patches: dict, ver: str) -> Optional[list]:
         if patches is None:
             return None
 
@@ -379,7 +383,7 @@ class SigApplier:
                     for lib_ver in patch_lib_vers:
                         patch_lib_ver = lib_ver.replace('.', '')
 
-                        if patch_lib_ver.lower() != version.lower():
+                        if patch_lib_ver.lower() != ver.lower():
                             continue
 
                         return lib['objs']
@@ -394,9 +398,10 @@ class SigApplier:
         objs_list = dict()
 
         for sig in self._signatures:
-            low_entropy = sig.get_entropy() < self.min_entropy
-
             bytes_data = sig.get_sig()
+
+            low_entropy = (not bytes_data.is_bios_call()) and (sig.get_entropy() < self.min_entropy)
+
             labels = sig.get_labels()
 
             search_addr = start_addr
@@ -491,57 +496,57 @@ class PsxExe:
         self._min_entropy = min_entropy
         self._appliers = dict()
 
+        self.init_pc = 0
+        self.init_gp = 0
+        self.rom_addr = 0
+        self.rom_size = 0
+        self.data_addr = 0
+        self.data_size = 0
+        self.bss_addr = 0
+        self.bss_size = 0
+        self.sp_base = 0
+        self.sp_offset = 0
+
     def get_exe_name(self):
         return self._exe_name
 
-    @classmethod
-    def parse(cls, li):
+    def parse(self, li, print_msg):
         li.seek(0)
 
         header = li.read(0x800)
 
         if len(header) < 0x800:
-            return None
+            return False
 
         pos = 0
         ascii_id = struct.unpack_from('8s', header, pos)[0]
 
         if ascii_id != b'PS-X EXE':
-            return None
+            return False
 
-        init_pc = struct.unpack_from('I', header, 0x10)[0]
-        idaapi.msg('PC = 0x%08X\n' % init_pc)
-        init_gp = struct.unpack_from('I', header, 0x14)[0]
-        idaapi.msg('GP = 0x%08X\n' % init_gp)
-        rom_addr = struct.unpack_from('I', header, 0x18)[0]
-        rom_size = struct.unpack_from('I', header, 0x1C)[0]
-        idaapi.msg('ROM[0x%08X:0x%08X]\n' % (rom_addr, rom_addr + rom_size))
-        data_addr = struct.unpack_from('I', header, 0x20)[0]
-        data_size = struct.unpack_from('I', header, 0x24)[0]
-        idaapi.msg('DATA[0x%08X:0x%08X]\n' % (data_addr, data_addr + data_size))
-        bss_addr = struct.unpack_from('I', header, 0x28)[0]
-        bss_size = struct.unpack_from('I', header, 0x2C)[0]
-        idaapi.msg('BSS[0x%08X:0x%08X]\n' % (bss_addr, bss_addr + bss_size))
-        sp_base = struct.unpack_from('I', header, 0x30)[0]
-        sp_offset = struct.unpack_from('I', header, 0x34)[0]
-        idaapi.msg('SP = 0x%08X\n' % (sp_base + sp_offset))
+        self.init_pc = struct.unpack_from('I', header, 0x10)[0]
+        self.init_gp = struct.unpack_from('I', header, 0x14)[0]
+        self.rom_addr = struct.unpack_from('I', header, 0x18)[0]
+        self.rom_size = struct.unpack_from('I', header, 0x1C)[0]
+        self.data_addr = struct.unpack_from('I', header, 0x20)[0]
+        self.data_size = struct.unpack_from('I', header, 0x24)[0]
+        self.bss_addr = struct.unpack_from('I', header, 0x28)[0]
+        self.bss_size = struct.unpack_from('I', header, 0x2C)[0]
+        self.sp_base = struct.unpack_from('I', header, 0x30)[0]
+        self.sp_offset = struct.unpack_from('I', header, 0x34)[0]
 
-        return \
-            {
-                'pc': init_pc,
-                'gp': init_gp,
-                'rom_addr': rom_addr,
-                'rom_size': rom_size,
-                'data_addr': data_addr,
-                'data_size': data_size,
-                'bss_addr': bss_addr,
-                'bss_size': bss_size,
-                'sp_base': sp_base,
-                'sp_offset': sp_offset
-            }
+        if print_msg:
+            idaapi.msg('PC = 0x%08X\n' % self.init_pc)
+            idaapi.msg('GP = 0x%08X\n' % self.init_gp)
+            idaapi.msg('ROM[0x%08X:0x%08X]\n' % (self.rom_addr, self.rom_addr + self.rom_size))
+            idaapi.msg('DATA[0x%08X:0x%08X]\n' % (self.data_addr, self.data_addr + self.data_size))
+            idaapi.msg('BSS[0x%08X:0x%08X]\n' % (self.bss_addr, self.bss_addr + self.bss_size))
+            idaapi.msg('SP = 0x%08X\n' % (self.sp_base + self.sp_offset))
 
-    @classmethod
-    def find_main(cls, rom_addr, rom_end):
+        return True
+
+    @staticmethod
+    def find_main(rom_addr, rom_end):
         # '00 00 00 00 ? ? ? ? 00 00 00 00 4D 00 00 00'
         addr, _ = masked_search(rom_addr, rom_end,
                                 b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x4D\x00\x00\x00',
@@ -737,53 +742,52 @@ class PsxExe:
         cls.add_port_2(0x1F801DBA, 'CURR_MAIN_VOL_R')
         cls.add_port_4(0x1F801DBC, 'SPU_UNKN_1DBC')
 
-    @classmethod
-    def create_segments(cls, li, psx):
+    def create_segments(self, li):
         li.seek(0x800)
 
-        code = li.read(psx['rom_size'])
+        code = li.read(self.rom_size)
 
-        idaapi.add_segm(0, 0x80000000, psx['rom_addr'], 'RAM', 'DATA')
+        idaapi.add_segm(0, 0x80000000, self.rom_addr, 'RAM', 'DATA')
         idc.set_default_sreg_value(0x80000000, 'ds', 0)
 
-        idaapi.mem2base(code, psx['rom_addr'], 0x800)
-        idaapi.add_segm(0, psx['rom_addr'], psx['rom_addr'] + psx['rom_size'], 'CODE', 'CODE')
-        idc.set_default_sreg_value(psx['rom_addr'], 'ds', 0)
+        idaapi.mem2base(code, self.rom_addr, 0x800)
+        idaapi.add_segm(0, self.rom_addr, self.rom_addr + self.rom_size, 'CODE', 'CODE')
+        idc.set_default_sreg_value(self.rom_addr, 'ds', 0)
 
-        if psx['data_addr'] != 0:
-            idaapi.add_segm(0, psx['data_addr'], psx['data_addr'] + psx['data_size'], '.data', 'DATA')
-            idc.set_default_sreg_value(psx['data_addr'], 'ds', 0)
+        if self.data_addr != 0:
+            idaapi.add_segm(0, self.data_addr, self.data_addr + self.data_size, '.data', 'DATA')
+            idc.set_default_sreg_value(self.data_addr, 'ds', 0)
 
-        if psx['bss_addr'] != 0:
-            idaapi.add_segm(0, psx['bss_addr'], psx['bss_addr'] + psx['bss_size'], '.bss', 'BSS')
-            idc.set_default_sreg_value(psx['bss_addr'], 'ds', 0)
+        if self.bss_addr != 0:
+            idaapi.add_segm(0, self.bss_addr, self.bss_addr + self.bss_size, '.bss', 'BSS')
+            idc.set_default_sreg_value(self.bss_addr, 'ds', 0)
 
-        idaapi.add_segm(0, psx['rom_addr'] + psx['rom_size'], 0x80200000, 'RAM', 'DATA')
-        idc.set_default_sreg_value(psx['rom_addr'] + psx['rom_size'], 'ds', 0)
+        idaapi.add_segm(0, self.rom_addr + self.rom_size, 0x80200000, 'RAM', 'DATA')
+        idc.set_default_sreg_value(self.rom_addr + self.rom_size, 'ds', 0)
 
         idaapi.add_segm(0, 0x1F800000, 0x1F800400, 'CACHE', 'DATA')
         idaapi.add_segm(0, 0x1F800400, 0x1F801000, 'UNK1', 'XTRN')
 
-        cls.add_mem_ctrl1()
-        cls.add_mem_ctrl2()
-        cls.add_periph_io()
-        cls.add_int_ctrl()
-        cls.add_dma()
-        cls.add_timers()
-        cls.add_cdrom_regs()
-        cls.add_gpu_regs()
-        cls.add_mdec_regs()
-        cls.add_spu_voices()
-        cls.add_spu_ctrl_regs()
+        self.add_mem_ctrl1()
+        self.add_mem_ctrl2()
+        self.add_periph_io()
+        self.add_int_ctrl()
+        self.add_dma()
+        self.add_timers()
+        self.add_cdrom_regs()
+        self.add_gpu_regs()
+        self.add_mdec_regs()
+        self.add_spu_voices()
+        self.add_spu_ctrl_regs()
 
         idaapi.cvar.inf.start_ss = idaapi.cvar.inf.start_cs = 0
-        idaapi.cvar.inf.start_ip = idaapi.cvar.inf.start_ea = psx['pc']
-        idaapi.cvar.inf.start_sp = psx['sp_base'] + psx['sp_offset']
+        idaapi.cvar.inf.start_ip = idaapi.cvar.inf.start_ea = self.init_pc
+        idaapi.cvar.inf.start_sp = self.sp_base + self.sp_offset
 
-    def apply_psyq_signatures_by_version(self, version: str, start_addr: int, end_addr: int) -> None:
+    def apply_psyq_signatures_by_version(self, ver: str) -> None:
         ida_psyq = idaapi.idadir(os.path.join(idaapi.LDR_SUBDIR, 'psyq'))
         patches_file = os.path.join(ida_psyq, 'patches.json')
-        ver_dir = os.path.join(ida_psyq, version)
+        ver_dir = os.path.join(ida_psyq, ver)
 
         files = list()
         for file in os.listdir(ver_dir):
@@ -791,44 +795,69 @@ class PsxExe:
                 files.append(file)
 
         for file in files:
-            fname = os.path.basename(file)
+            fn = os.path.basename(file)
 
-            if fname in self._appliers:
-                sig = self._appliers[fname]
+            if fn in self._appliers:
+                sig = self._appliers[fn]
             else:
                 sig = SigApplier(self._exe_name, os.path.join(ver_dir, file), patches_file,
                                  self._only_first, self._min_entropy)
-                self._appliers[fname] = sig
+                self._appliers[fn] = sig
 
-            sig.apply_signatures(start_addr, end_addr)
+            sig.apply_signatures(self.rom_addr, self.rom_addr + self.rom_size)
 
     @staticmethod
     def apply_til(ver):
         if len(ver) > 0:
             idaapi.add_til('psyq%s.til' % ver, idaapi.ADDTIL_DEFAULT)
 
+    @staticmethod
+    def __get_real_gp(rom_addr, rom_end):
+        # li gp, 0xADDR; move $fp, $sp
+        gp_set, _ = masked_search(rom_addr, rom_end, b'\x9C\x27\x21\xF0\xA0\x03', b'\xFF\xFF\xFF\xFF\xFF\xFF')
 
-def accept_file(li, filename):
+        if gp_set != idaapi.BADADDR:
+            gp_set -= 6
+
+            gp1 = idaapi.get_bytes(gp_set + 0, 2)
+            gp2 = idaapi.get_bytes(gp_set + 4, 2)
+
+            new_gp = ((gp1[1] & 0xFF) << 24) | ((gp1[0] & 0xFF) << 16) | ((gp2[1] & 0xFF) << 8) | ((gp2[0] & 0xFF) << 0)
+            idaapi.msg("Real GP found at 0x%08X => 0x%08X!\n" % (gp_set, new_gp))
+
+            return new_gp
+
+        return 0
+
+    def update_gp(self):
+        if self.init_gp == 0:
+            self.init_gp = PsxExe.__get_real_gp(self.rom_addr, self.rom_addr + self.rom_size)
+
+        if self.init_gp != 0:
+            idc.process_config_line("MIPS_GP=0x%08X" % self.init_gp)
+        else:
+            idaapi.warning('$GP from header is zero! Check \'start \' function for a $gp loading instruction.\n')
+
+
+def accept_file(li_, filename_):
     return 0
 
 
-def load_file(li, neflags, format):
+def load_file(li_, neflags_, format_):
     return 0
 
 
 if __name__ == '__main__':
     fname = idaapi.get_input_file_path()
-    psx_exe = PsxExe(os.path.basename(fname), ONLY_FIRST, MIN_ENTROPY)
+    psx = PsxExe(os.path.basename(fname), ONLY_FIRST, MIN_ENTROPY)
 
-    li = open(fname, 'rb')
-    psx = psx_exe.parse(li)
-    li.close()
+    f = open(fname, 'rb')
+    good = psx.parse(f, True)
+    f.close()
 
-    detect = DetectPsyQ(psx_exe.get_exe_name(), ONLY_FIRST, MIN_ENTROPY)
-    version = detect.get_psyq_version(psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
-    psx_exe.apply_psyq_signatures_by_version(version, psx['rom_addr'], psx['rom_addr'] + psx['rom_size'])
+    if good:
+        detect = DetectPsyQ(psx.get_exe_name(), ONLY_FIRST, MIN_ENTROPY)
+        version = detect.get_psyq_version(psx.rom_addr, psx.rom_addr + psx.rom_size)
+        psx.apply_psyq_signatures_by_version(version)
 
-    if psx['gp'] != 0:
-        idc.process_config_line("MIPS_GP=0x%08X" % psx['gp'])
-    else:
-        idaapi.warning('$GP from header is zero! Check \'start \' function for a $gp loading instruction.\n')
+        psx.update_gp()
