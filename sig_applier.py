@@ -272,7 +272,11 @@ class PsyqSig:
     @classmethod
     def from_json_token(cls, token: dict, patches: List[dict]) -> PsyqSig:
         name = token['name']
-        sig = token['sig']
+
+        if 'sig' in token:
+            sig = token['sig']
+        else:
+            return None
 
         signature = MaskedBytes.from_masked_string(sig)
 
@@ -357,7 +361,8 @@ class SigApplier:
         for item in root:
             sig = PsyqSig.from_json_token(item, patches_obj)
 
-            self._signatures.append(sig)
+            if sig:
+                self._signatures.append(sig)
 
     def __find_game_patches(self, patches: dict, ver: str) -> Optional[list]:
         if patches is None:
