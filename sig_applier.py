@@ -10,6 +10,7 @@ from typing import List, Optional, Tuple
 import ida_auto
 import ida_bytes
 import ida_entry
+import ida_search
 import idaapi
 import idc
 
@@ -34,12 +35,15 @@ def masked_search(start_addr: int, end_addr: int, bytes_data: bytes, masks_data:
 
     bytes_data_prep = prepare_first_search(bytes_data, masks_data)
 
-    patterns = ida_bytes.compiled_binpat_vec_t()
-    idaapi.parse_binpat_str(patterns, start_addr, bytes_data_prep.decode(), 16)
-    ea = ida_bytes.bin_search(start_addr, end_addr, patterns,
-                              ida_bytes.BIN_SEARCH_FORWARD |
-                              ida_bytes.BIN_SEARCH_NOBREAK |
-                              ida_bytes.BIN_SEARCH_NOSHOW)
+    if idaapi.IDA_SDK_VERSION >= 760:
+        patterns = ida_bytes.compiled_binpat_vec_t()
+        idaapi.parse_binpat_str(patterns, start_addr, bytes_data_prep.decode(), 16)
+        ea = ida_bytes.bin_search(start_addr, end_addr, patterns,
+                                  ida_bytes.BIN_SEARCH_FORWARD |
+                                  ida_bytes.BIN_SEARCH_NOBREAK |
+                                  ida_bytes.BIN_SEARCH_NOSHOW)
+    else:
+        ea = ida_search.find_binary(start_addr, end_addr, bytes_data_prep.decode(), 16, idaapi.SEARCH_DOWN)
 
     if ea == idaapi.BADADDR:
         return idaapi.BADADDR, None
@@ -754,21 +758,31 @@ class PsxExe:
 
         idaapi.add_segm(0, 0x80000000, self.rom_addr, 'RAM', 'DATA')
         idc.set_default_sreg_value(0x80000000, 'ds', 0)
+        seg = idaapi.getseg(0x80000000)
+        seg.perm = idaapi.SEGPERM_EXEC | idaapi.SEGPERM_READ | idaapi.SEGPERM_WRITE
 
         idaapi.mem2base(code, self.rom_addr, 0x800)
         idaapi.add_segm(0, self.rom_addr, self.rom_addr + self.rom_size, 'CODE', 'CODE')
         idc.set_default_sreg_value(self.rom_addr, 'ds', 0)
+        seg = idaapi.getseg(self.rom_addr)
+        seg.perm = idaapi.SEGPERM_EXEC | idaapi.SEGPERM_READ | idaapi.SEGPERM_WRITE
 
         if self.data_addr != 0:
             idaapi.add_segm(0, self.data_addr, self.data_addr + self.data_size, '.data', 'DATA')
             idc.set_default_sreg_value(self.data_addr, 'ds', 0)
+            seg = idaapi.getseg(self.data_addr)
+            seg.perm = idaapi.SEGPERM_EXEC | idaapi.SEGPERM_READ | idaapi.SEGPERM_WRITE
 
         if self.bss_addr != 0:
             idaapi.add_segm(0, self.bss_addr, self.bss_addr + self.bss_size, '.bss', 'BSS')
             idc.set_default_sreg_value(self.bss_addr, 'ds', 0)
+            seg = idaapi.getseg(self.bss_addr)
+            seg.perm = idaapi.SEGPERM_EXEC | idaapi.SEGPERM_READ | idaapi.SEGPERM_WRITE
 
         idaapi.add_segm(0, self.rom_addr + self.rom_size, 0x80200000, 'RAM', 'DATA')
         idc.set_default_sreg_value(self.rom_addr + self.rom_size, 'ds', 0)
+        seg = idaapi.getseg(self.rom_addr + self.rom_size)
+        seg.perm = idaapi.SEGPERM_EXEC | idaapi.SEGPERM_READ | idaapi.SEGPERM_WRITE
 
         idaapi.add_segm(0, 0x1F800000, 0x1F800400, 'CACHE', 'DATA')
         idaapi.add_segm(0, 0x1F800400, 0x1F801000, 'UNK1', 'XTRN')

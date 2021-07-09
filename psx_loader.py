@@ -36,6 +36,28 @@ def load_file(li, neflags, format):
 
     psx.create_segments(li)
 
+    im = idaapi.compiler_info_t()
+    idaapi.inf_get_cc(im)
+    im.id = idaapi.COMP_GNU
+    im.cm = idaapi.CM_N32_F48 | idaapi.CM_M_NN | idaapi.CM_CC_CDECL
+    im.defalign = 4
+    im.size_i = 4
+    im.size_b = 1
+    im.size_e = 4
+    im.size_s = 2
+    im.size_l = 4
+    im.size_ll = 8
+    im.size_ldbl = 8
+    idaapi.inf_set_cc(im)
+    # Replace predefined macros and included directories by id
+    # from IDA.CFG (see 'CC_PARMS' in Built-in C parser parameters)
+    idaapi.set_c_macros(ida_idp.cfg_get_cc_predefined_macros(im.id))
+    idaapi.set_c_header_path(ida_idp.cfg_get_cc_header_path(im.id))
+    # Resetting new settings :)
+    idc.set_inf_attr(idc.INF_COMPILER, im.id)
+
+    idc.process_config_line("MIPS_DEFAULT_ABI=o32")
+
     detect = DetectPsyQ(psx.get_exe_name(), ONLY_FIRST, MIN_ENTROPY)
     version = detect.get_psyq_version(psx.rom_addr, psx.rom_addr + psx.rom_size)
 
@@ -44,10 +66,8 @@ def load_file(li, neflags, format):
 
     idaapi.add_entry(psx.init_pc, psx.init_pc, 'start', 1)
 
-    idc.process_config_line("MIPS_DEFAULT_ABI=o32")
-    idaapi.set_compiler_id(idaapi.COMP_GNU, "o32")
-
     PsxExe.apply_til(version)
+
     psx.update_gp()
 
     return 1
