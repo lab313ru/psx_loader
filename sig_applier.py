@@ -751,6 +751,12 @@ class PsxExe:
         cls.add_port_2(0x1F801DBA, 'CURR_MAIN_VOL_R')
         cls.add_port_4(0x1F801DBC, 'SPU_UNKN_1DBC')
 
+    @classmethod
+    def create_got_fix(cls):
+        idaapi.add_segm(0, 0x90000000, 0x90000001, '.got', 'DATA')
+        seg = idaapi.getseg(0x90000000)
+        idaapi.set_visible_segm(seg, False)
+
     def create_segments(self, li):
         li.seek(0x800)
 
@@ -798,6 +804,7 @@ class PsxExe:
         self.add_mdec_regs()
         self.add_spu_voices()
         self.add_spu_ctrl_regs()
+        self.create_got_fix()
 
         idaapi.cvar.inf.start_ss = idaapi.cvar.inf.start_cs = 0
         idaapi.cvar.inf.start_ip = idaapi.cvar.inf.start_ea = self.init_pc
